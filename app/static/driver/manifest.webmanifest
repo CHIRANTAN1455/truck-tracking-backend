@@ -1,0 +1,10 @@
+{
+  "name": "Truck Driver App",
+  "short_name": "Driver",
+  "start_url": "/driver-app/",
+  "scope": "/driver-app/",
+  "display": "standalone",
+  "background_color": "#0f766e",
+  "theme_color": "#0f766e",
+  "icons": []
+}
