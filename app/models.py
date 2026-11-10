@@ -29,10 +29,42 @@ class AlertKind:
     LOCATION_STALE = "LOCATION_STALE"
 
 
+class LocationSource:
+    APP = "app"  # driver phone app GPS (/ui/driver/location)
+    SIM = "sim"  # telecom network location of the driver's SIM (consent based)
+
+
+class SimStatus:
+    PENDING = "PENDING"  # consent SMS sent, waiting for the driver to reply
+    ACTIVE = "ACTIVE"  # driver consented; we may locate the SIM
+    REVOKED = "REVOKED"  # driver or operator withdrew consent
+    EXPIRED = "EXPIRED"  # no reply in time, or consent validity ran out
+    FAILED = "FAILED"  # provider could not register the number (not reachable, unsupported operator, ...)
+
+
+class Company(Base):
+    """A trucking company (transporter / fleet owner). Drivers and vehicles belong to one company."""
+
+    __tablename__ = "companies"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True)
+    name: Mapped[str] = mapped_column(String(120), unique=True)
+    gstin: Mapped[str | None] = mapped_column(String(15))
+    contact_name: Mapped[str | None] = mapped_column(String(100))
+    contact_phone: Mapped[str | None] = mapped_column(String(20))
+    contact_email: Mapped[str | None] = mapped_column(String(120))
+    hub_city: Mapped[str | None] = mapped_column(String(64))
+    hub_lat: Mapped[float | None]
+    hub_lon: Mapped[float | None]
+    active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class Vehicle(Base):
     __tablename__ = "vehicles"
     id: Mapped[int] = mapped_column(primary_key=True)
     reg_no: Mapped[str] = mapped_column(String(32), unique=True)
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id"), index=True)
     vehicle_type: Mapped[str] = mapped_column(String(32), default="truck")
     capacity_kg: Mapped[float | None]
     active: Mapped[bool] = mapped_column(default=True)
@@ -45,6 +77,7 @@ class Driver(Base):
     name: Mapped[str] = mapped_column(String(100))
     phone: Mapped[str] = mapped_column(String(20), unique=True)
     license_no: Mapped[str | None] = mapped_column(String(50))
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id"), index=True)
     vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"))
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
@@ -133,6 +166,7 @@ class LocationPoint(Base):
     bearing: Mapped[float | None]
     # False when accuracy was worse than MIN_LOCATION_ACCURACY_M (kept for history, ignored for distance).
     accurate: Mapped[bool] = mapped_column(default=True)
+    source: Mapped[str] = mapped_column(String(8), default=LocationSource.APP)
     received_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     __table_args__ = (
@@ -152,6 +186,41 @@ class DriverLastLocation(Base):
     bearing: Mapped[float | None]
     received_at: Mapped[datetime]
     trip_id: Mapped[str | None] = mapped_column(String(20))
+    source: Mapped[str] = mapped_column(String(8), default=LocationSource.APP)
+
+
+class SimConsent(Base):
+    """Consent-based SIM (telecom network) tracking registration, one per driver.
+
+    We may only locate a number while its consent is ACTIVE. Every state change is also written to
+    `sim_events`, which is the audit trail of who consented when.
+    """
+
+    __tablename__ = "sim_consents"
+    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id"), primary_key=True)
+    msisdn: Mapped[str] = mapped_column(String(15), unique=True)  # 91XXXXXXXXXX
+    provider: Mapped[str] = mapped_column(String(32))
+    provider_ref: Mapped[str | None] = mapped_column(String(64))
+    operator: Mapped[str | None] = mapped_column(String(16))  # JIO | AIRTEL | VI | BSNL, as reported by provider
+    status: Mapped[str] = mapped_column(String(10), default=SimStatus.PENDING)
+    requested_at: Mapped[datetime] = mapped_column(default=utcnow)
+    activated_at: Mapped[datetime | None]
+    expires_at: Mapped[datetime | None]
+    revoked_at: Mapped[datetime | None]
+    last_ping_at: Mapped[datetime | None]  # last time we asked the provider for a fix
+    last_fix_at: Mapped[datetime | None]  # time of the last fix we stored
+    consecutive_failures: Mapped[int] = mapped_column(default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+
+
+class SimEvent(Base):
+    __tablename__ = "sim_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id"), index=True)
+    msisdn: Mapped[str] = mapped_column(String(15))
+    kind: Mapped[str] = mapped_column(String(24))  # CONSENT_REQUESTED | ACTIVE | REVOKED | EXPIRED | FAILED | ...
+    detail: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
 class TrackingLink(Base):

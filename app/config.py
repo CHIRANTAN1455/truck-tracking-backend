@@ -52,6 +52,29 @@ class Settings:
         default_factory=lambda: _env("PUBLIC_TRACKING_BASE_URL", "http://localhost:8501")
     )
 
+    # Consent-based SIM tracking (telecom network location of the driver's SIM).
+    # SIM_PROVIDER: "mock" simulates the telecom aggregator for development; set to your aggregator's
+    # adapter name in production (see app/services/sim/providers.py).
+    sim_provider: str = field(default_factory=lambda: _env("SIM_PROVIDER", "mock"))
+    sim_api_base_url: str = field(default_factory=lambda: _env("SIM_API_BASE_URL", ""))
+    sim_api_key: str = field(default_factory=lambda: _env("SIM_API_KEY", ""))
+    # Shared secret for the HMAC-SHA256 signature on POST /integrations/sim/webhook. Empty = webhook disabled.
+    sim_webhook_secret: str = field(default_factory=lambda: _env("SIM_WEBHOOK_SECRET", ""))
+    # Send the consent SMS automatically when a driver is created.
+    sim_auto_consent: bool = field(default_factory=lambda: _bool("SIM_AUTO_CONSENT", "true"))
+    # Each ping is billed by the aggregator, so drivers on a trip are located more often than idle ones.
+    sim_ping_on_trip_min: float = field(default_factory=lambda: float(_env("SIM_PING_ON_TRIP_MIN", "10")))
+    sim_ping_idle_min: float = field(default_factory=lambda: float(_env("SIM_PING_IDLE_MIN", "60")))  # 0 = off
+    sim_poll_tick_sec: float = field(default_factory=lambda: float(_env("SIM_POLL_TICK_SEC", "30")))
+    sim_pending_consent_hours: float = field(default_factory=lambda: float(_env("SIM_PENDING_CONSENT_HOURS", "48")))
+    sim_consent_validity_days: float = field(default_factory=lambda: float(_env("SIM_CONSENT_VALIDITY_DAYS", "180")))
+    # Network fixes are coarse (cell tower), so trip automation uses wider radii for SIM points.
+    sim_max_accuracy_m: float = field(default_factory=lambda: float(_env("SIM_MAX_ACCURACY_M", "5000")))
+    sim_in_transit_distance_m: float = field(default_factory=lambda: float(_env("SIM_IN_TRANSIT_DISTANCE_M", "3000")))
+    sim_reached_radius_m: float = field(default_factory=lambda: float(_env("SIM_REACHED_RADIUS_M", "2000")))
+    # A SIM-tracked trip is "stale" after this many missed pings.
+    sim_stale_after_pings: float = field(default_factory=lambda: float(_env("SIM_STALE_AFTER_PINGS", "2.5")))
+
     upload_dir: str = field(default_factory=lambda: _env("UPLOAD_DIR", "./uploads"))
 
     # Optional email delivery. Without SMTP_HOST notifications are only logged.

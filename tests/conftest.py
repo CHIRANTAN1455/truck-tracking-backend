@@ -7,6 +7,9 @@ os.environ["UPLOAD_DIR"] = f"{_tmp}/uploads"
 os.environ["DEV_MODE"] = "true"
 os.environ["OSRM_URL"] = ""
 os.environ["ALERT_CHECK_INTERVAL_SEC"] = "3600"
+os.environ["SIM_PROVIDER"] = "mock"
+os.environ["SIM_WEBHOOK_SECRET"] = "test-secret"
+os.environ["SIM_POLL_TICK_SEC"] = "3600"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

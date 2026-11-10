@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..models import Alert, AlertKind, DriverLastLocation, Shipment, Trip, TripStatus
+from ..models import Alert, AlertKind, DriverLastLocation, Shipment, SimConsent, SimStatus, Trip, TripStatus
 from ..timeutil import iso, utcnow
 from . import notify
 
@@ -40,16 +40,25 @@ def resolve_alerts(db: Session, trip_id: str, kind: str | None = None) -> None:
 
 
 def check_trip(db: Session, trip: Trip) -> None:
-    from .trips import compute_eta  # local import: trips imports this module
+    from .sim import stale_after_minutes  # local imports: both modules import this one
+    from .trips import compute_eta
 
     now = utcnow()
     last = db.get(DriverLastLocation, trip.driver_id) if trip.driver_id else None
 
-    stale_after = timedelta(minutes=settings.stale_location_minutes)
-    if last is None or now - last.received_at > stale_after:
+    stale_min = stale_after_minutes(last)
+    if last is None or now - last.received_at > timedelta(minutes=stale_min):
         since = iso(last.received_at) if last else "trip start"
+        consent = db.get(SimConsent, trip.driver_id) if trip.driver_id else None
+        why = ""
+        if consent is None:
+            why = " Driver is not registered for SIM tracking."
+        elif consent.status != SimStatus.ACTIVE:
+            why = f" SIM tracking consent is {consent.status}."
+        elif consent.last_error:
+            why = f" {consent.last_error}."
         open_alert(db, trip, AlertKind.LOCATION_STALE,
-                   f"No location update for more than {settings.stale_location_minutes:g} min (last: {since})",
+                   f"No location update for more than {stale_min:g} min (last: {since}).{why}",
                    last.lat if last else None, last.lon if last else None)
 
     if trip.expected_delivery_at and trip.status != TripStatus.REACHED:

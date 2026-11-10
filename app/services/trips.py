@@ -105,6 +105,8 @@ def assign(db: Session, trip: Trip, driver_id: int, vehicle_id: int | None) -> T
     vehicle = db.get(Vehicle, vehicle_id)
     if vehicle is None or not vehicle.active:
         raise HTTPException(400, "Vehicle not found or inactive")
+    if driver.company_id and vehicle.company_id and driver.company_id != vehicle.company_id:
+        raise HTTPException(400, "Driver and vehicle belong to different companies")
     trip.driver_id, trip.vehicle_id = driver.id, vehicle.id
     trip.status = S.ASSIGNED
     _event(db, trip, S.ASSIGNED, f"Driver {driver.name}, vehicle {vehicle.reg_no}")

@@ -49,7 +49,9 @@ def track(token: str, db: Session = Depends(get_db)):
         last = db.get(DriverLastLocation, trip.driver_id)
         if last and last.trip_id == trip.id:
             live = {"lat": last.lat, "lon": last.lon, "bearing": last.bearing, "ts": iso(last.ts),
-                    "age_sec": int((utcnow() - last.received_at).total_seconds())}
+                    "age_sec": int((utcnow() - last.received_at).total_seconds()),
+                    # SIM fixes are approximate: the customer page draws this as a circle, not a pin.
+                    "source": last.source, "accuracy_m": last.acc}
         eta_data = trips.compute_eta(db, trip, last)
         if eta_data:
             eta = {"eta": eta_data["eta"], "remaining_km": eta_data["remaining_km"]}

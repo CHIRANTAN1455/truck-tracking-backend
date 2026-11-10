@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from .. import serializers as ser
 from ..auth import require_admin
 from ..db import get_db
-from ..models import Alert, Driver, Notification, Trip, TripStatus, Vehicle
+from ..models import Alert, Company, Driver, Notification, Trip, TripStatus, Vehicle
 from ..services import alerts
 from ..timeutil import iso, to_naive_utc, utcnow
 
@@ -15,8 +15,12 @@ router = APIRouter(tags=["alerts & reports"], dependencies=[Depends(require_admi
 
 
 @router.get("/alerts")
-def list_alerts(open_only: bool = True, trip_id: str | None = None, db: Session = Depends(get_db)):
+def list_alerts(open_only: bool = True, trip_id: str | None = None, company_id: int | None = None,
+                db: Session = Depends(get_db)):
     q = select(Alert).order_by(Alert.created_at.desc()).limit(500)
+    if company_id:
+        q = q.where(Alert.trip_id.in_(select(Trip.id).where(
+            Trip.driver_id.in_(select(Driver.id).where(Driver.company_id == company_id)))))
     if open_only:
         q = q.where(Alert.resolved_at.is_(None))
     if trip_id:
@@ -50,7 +54,7 @@ def list_notifications(trip_id: str | None = None, limit: int = 200, db: Session
 
 @router.get("/reports/trips")
 def trip_report(start: datetime | None = None, end: datetime | None = None, driver_id: int | None = None,
-                db: Session = Depends(get_db)):
+                company_id: int | None = None, db: Session = Depends(get_db)):
     """Distance and duration per trip, plus totals. Filters on trip creation time."""
     q = select(Trip).order_by(Trip.created_at.desc())
     if start:
@@ -59,6 +63,8 @@ def trip_report(start: datetime | None = None, end: datetime | None = None, driv
         q = q.where(Trip.created_at <= to_naive_utc(end))
     if driver_id:
         q = q.where(Trip.driver_id == driver_id)
+    if company_id:
+        q = q.where(Trip.driver_id.in_(select(Driver.id).where(Driver.company_id == company_id)))
     rows, by_status = [], {}
     total_km = total_min = 0.0
     for t in db.scalars(q):
@@ -71,11 +77,13 @@ def trip_report(start: datetime | None = None, end: datetime | None = None, driv
             on_time = t.ended_at <= t.expected_delivery_at
         d = db.get(Driver, t.driver_id) if t.driver_id else None
         v = db.get(Vehicle, t.vehicle_id) if t.vehicle_id else None
+        c = db.get(Company, d.company_id) if d and d.company_id else None
         if t.status == TripStatus.DELIVERED:
             total_km += t.distance_m / 1000
             total_min += duration_min or 0
         rows.append({"trip_id": t.id, "shipment_id": t.shipment_id, "status": t.status,
                      "driver": d.name if d else None, "vehicle": v.reg_no if v else None,
+                     "company": c.name if c else None,
                      "created_at": iso(t.created_at), "started_at": iso(t.started_at), "ended_at": iso(t.ended_at),
                      "distance_km": round(t.distance_m / 1000, 2),
                      "planned_distance_km": round((t.planned_distance_m or 0) / 1000, 2),

@@ -2,18 +2,50 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import (
-    Alert, Driver, DriverLastLocation, LocationPoint, Notification, ProofOfDelivery, Shipment,
-    TrackingLink, Trip, TripEvent, Vehicle,
+    Alert, Company, Driver, DriverLastLocation, LocationPoint, Notification, ProofOfDelivery, Shipment,
+    SimConsent, SimEvent, TrackingLink, Trip, TripEvent, Vehicle,
 )
 from .services import notify
 from .timeutil import iso, utcnow
+
+
+def company_ref(c: Company | None) -> dict | None:
+    return {"id": c.id, "code": c.code, "name": c.name} if c else None
+
+
+def company(c: Company, counts: dict | None = None) -> dict:
+    data = {"id": c.id, "code": c.code, "name": c.name, "gstin": c.gstin, "contact_name": c.contact_name,
+            "contact_phone": c.contact_phone, "contact_email": c.contact_email, "hub_city": c.hub_city,
+            "hub_lat": c.hub_lat, "hub_lon": c.hub_lon, "active": c.active, "created_at": iso(c.created_at)}
+    if counts is not None:
+        data["counts"] = counts
+    return data
 
 
 def vehicle(v: Vehicle | None) -> dict | None:
     if v is None:
         return None
     return {"id": v.id, "reg_no": v.reg_no, "vehicle_type": v.vehicle_type, "capacity_kg": v.capacity_kg,
-            "active": v.active, "created_at": iso(v.created_at)}
+            "company_id": v.company_id, "active": v.active, "created_at": iso(v.created_at)}
+
+
+def sim(c: SimConsent | None, interval_min: float | None = None) -> dict | None:
+    if c is None:
+        return None
+    data = {"msisdn": c.msisdn, "provider": c.provider, "provider_ref": c.provider_ref, "operator": c.operator,
+            "status": c.status,
+            "requested_at": iso(c.requested_at), "activated_at": iso(c.activated_at),
+            "expires_at": iso(c.expires_at), "revoked_at": iso(c.revoked_at),
+            "last_ping_at": iso(c.last_ping_at), "last_fix_at": iso(c.last_fix_at),
+            "consecutive_failures": c.consecutive_failures, "last_error": c.last_error}
+    if interval_min is not None:
+        data["ping_interval_min"] = interval_min
+    return data
+
+
+def sim_event(e: SimEvent) -> dict:
+    return {"id": e.id, "driver_id": e.driver_id, "msisdn": e.msisdn, "kind": e.kind, "detail": e.detail,
+            "created_at": iso(e.created_at)}
 
 
 def last_location(loc: DriverLastLocation | None) -> dict | None:
@@ -22,12 +54,17 @@ def last_location(loc: DriverLastLocation | None) -> dict | None:
     age = (utcnow() - loc.received_at).total_seconds()
     return {"lat": loc.lat, "lon": loc.lon, "ts": iso(loc.ts), "received_at": iso(loc.received_at),
             "acc": loc.acc, "speed_kmph": round(loc.speed * 3.6, 1) if loc.speed is not None else None,
-            "bearing": loc.bearing, "age_sec": int(age), "trip_id": loc.trip_id}
+            "bearing": loc.bearing, "age_sec": int(age), "trip_id": loc.trip_id, "source": loc.source}
 
 
 def driver(db: Session, d: Driver) -> dict:
+    from .services.sim import ping_interval_min
+
+    consent = db.get(SimConsent, d.id)
     return {"id": d.id, "name": d.name, "phone": d.phone, "license_no": d.license_no, "active": d.active,
+            "company": company_ref(db.get(Company, d.company_id)) if d.company_id else None,
             "vehicle": vehicle(db.get(Vehicle, d.vehicle_id)) if d.vehicle_id else None,
+            "sim": sim(consent, ping_interval_min(db, d.id) if consent else None),
             "last_location": last_location(db.get(DriverLastLocation, d.id)), "created_at": iso(d.created_at)}
 
 
@@ -50,7 +87,7 @@ def event(e: TripEvent) -> dict:
 def point(p: LocationPoint) -> dict:
     return {"lat": p.lat, "lon": p.lon, "ts": iso(p.ts), "acc": p.acc,
             "speed_kmph": round(p.speed * 3.6, 1) if p.speed is not None else None,
-            "bearing": p.bearing, "accurate": p.accurate, "trip_id": p.trip_id}
+            "bearing": p.bearing, "accurate": p.accurate, "trip_id": p.trip_id, "source": p.source}
 
 
 def pod(p: ProofOfDelivery | None) -> dict | None:
@@ -94,6 +131,7 @@ def trip(db: Session, t: Trip, detail: bool = False, include_otp: bool = True) -
     data = {
         "id": t.id, "status": t.status, "shipment": shipment(s, include_otp),
         "driver": {"id": d.id, "name": d.name, "phone": d.phone} if d else None,
+        "company": company_ref(db.get(Company, d.company_id)) if d and d.company_id else None,
         "vehicle": vehicle(db.get(Vehicle, t.vehicle_id)) if t.vehicle_id else None,
         "expected_delivery_at": iso(t.expected_delivery_at), "started_at": iso(t.started_at),
         "ended_at": iso(t.ended_at), "distance_km": round(t.distance_m / 1000, 2),

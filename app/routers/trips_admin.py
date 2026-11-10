@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from .. import serializers as ser
 from ..auth import require_admin
 from ..db import get_db
-from ..models import ProofOfDelivery, Trip, TripStatus
+from ..models import Driver, ProofOfDelivery, Trip, TripStatus
 from ..schemas import TripAssign, TripCancel, TripIn, TripStatusIn
 from ..services import trips
 from .driver_app import MAX_PHOTO_BYTES
@@ -22,7 +22,7 @@ STATUS_GROUPS = {
 
 @router.get("")
 def list_trips(group: str | None = None, status: str | None = None, driver_id: int | None = None,
-               db: Session = Depends(get_db)):
+               company_id: int | None = None, db: Session = Depends(get_db)):
     q = select(Trip).order_by(Trip.created_at.desc())
     if group:
         if group not in STATUS_GROUPS:
@@ -32,6 +32,8 @@ def list_trips(group: str | None = None, status: str | None = None, driver_id: i
         q = q.where(Trip.status == status)
     if driver_id:
         q = q.where(Trip.driver_id == driver_id)
+    if company_id:
+        q = q.where(Trip.driver_id.in_(select(Driver.id).where(Driver.company_id == company_id)))
     return [ser.trip(db, t) for t in db.scalars(q)]
 
 
