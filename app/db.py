@@ -15,7 +15,9 @@ def _url(url: str) -> str:
 _sqlite = settings.database_url.startswith("sqlite")
 engine = create_engine(
     _url(settings.database_url),
-    connect_args={"check_same_thread": False} if _sqlite else {},
+    connect_args={"check_same_thread": False} if _sqlite
+    # Neon's pooled endpoint (PgBouncer) and psycopg's automatic prepared statements don't mix.
+    else {"prepare_threshold": None} if "-pooler." in settings.database_url else {},
     # Free Postgres tiers close idle connections / suspend; check each connection before use.
     pool_pre_ping=not _sqlite,
 )

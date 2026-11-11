@@ -2,6 +2,32 @@
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+
+def _load_env_files() -> None:
+    """Read KEY=VALUE lines from .env.local (written by `neon init`) and .env in the repo root.
+
+    Real environment variables always win, so hosting platforms and tests are not affected.
+    """
+    root = Path(__file__).resolve().parent.parent
+    for name in (".env.local", ".env"):
+        path = root / name
+        if not path.is_file():
+            continue
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.removeprefix("export ").strip()
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            os.environ.setdefault(key, value)
+
+
+_load_env_files()
 
 
 def _env(name: str, default: str) -> str:

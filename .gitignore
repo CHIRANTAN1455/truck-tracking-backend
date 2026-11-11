@@ -5,3 +5,6 @@ __pycache__/
 *.db
 uploads/
 .env
+.neon
+node_modules/
+.env.local
