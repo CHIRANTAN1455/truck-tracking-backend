@@ -3,8 +3,22 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from .config import settings
 
-_connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
-engine = create_engine(settings.database_url, connect_args=_connect_args)
+
+def _url(url: str) -> str:
+    # Hosted Postgres hands out postgres:// or postgresql:// URLs; SQLAlchemy needs the psycopg 3 driver named.
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
+_sqlite = settings.database_url.startswith("sqlite")
+engine = create_engine(
+    _url(settings.database_url),
+    connect_args={"check_same_thread": False} if _sqlite else {},
+    # Free Postgres tiers close idle connections / suspend; check each connection before use.
+    pool_pre_ping=not _sqlite,
+)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

@@ -1,0 +1,32 @@
+# Render Blueprint: free web service for the backend. Database: a free Postgres from neon.tech
+# (Render's own free Postgres is deleted after 30 days). See README "Deploy for free".
+services:
+  - type: web
+    name: truck-tracking-backend
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /healthcheck
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        sync: false  # paste the Neon connection string when creating the Blueprint
+      - key: PUBLIC_TRACKING_BASE_URL
+        sync: false  # the Streamlit dashboard URL, e.g. https://truck-tracking.streamlit.app
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD
+        generateValue: true  # shown under Environment in the Render dashboard
+      - key: SIM_WEBHOOK_SECRET
+        generateValue: true
+      - key: DEV_MODE
+        value: "false"  # true would return driver login OTPs to anyone on a public URL
+      - key: SIM_PROVIDER
+        value: mock
+      - key: SEED_DEMO
+        value: "true"  # loads the 100-driver demo on first start; set false before real use
+      - key: CORS_ORIGINS
+        value: "*"

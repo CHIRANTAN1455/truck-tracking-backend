@@ -69,13 +69,11 @@ def _reg(state: str, used: set) -> str:
             return reg
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--reset", action="store_true", help="drop and recreate all tables first")
-    args = ap.parse_args()
+def seed(reset: bool = False) -> bool:
+    """Load the demo data. Returns False (and changes nothing) if the database already has drivers."""
     if settings.sim_provider != "mock":
-        sys.exit("Refusing to seed with SIM_PROVIDER != mock: demo numbers must never get real consent SMS.")
-    if args.reset:
+        raise RuntimeError("Refusing to seed with SIM_PROVIDER != mock: demo numbers must never get real consent SMS.")
+    if reset:
         Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
 
@@ -84,7 +82,7 @@ def main() -> None:
     with SessionLocal() as db:
         if db.scalar(select(Driver).limit(1)):
             print("Database already has data; use --reset to start over.")
-            return
+            return False
         used_regs: set = set()
         phone_no = 9000000000
         summary = []
@@ -172,6 +170,16 @@ def main() -> None:
         for code, name, city, c in summary:
             print(f"{code:5} {name:28} {city:10} {c['drivers']:>7} {c['on_trip']:>8} {c['assigned']:>9} {c['idle']:>5}")
     print("\nSeeded. Admin login: ADMIN_USERNAME / ADMIN_PASSWORD (default admin / admin123)")
+    return True
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--reset", action="store_true", help="drop and recreate all tables first")
+    try:
+        seed(ap.parse_args().reset)
+    except RuntimeError as exc:
+        sys.exit(str(exc))
 
 
 if __name__ == "__main__":

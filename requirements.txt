@@ -3,5 +3,5 @@ uvicorn[standard]==0.34.0
 sqlalchemy==2.0.36
 python-multipart==0.0.20
 pydantic==2.14.2
-# Postgres in production: uncomment and set DATABASE_URL=postgresql+psycopg://user:pass@host/db
-# psycopg[binary]==3.2.3
+# Postgres in production: DATABASE_URL=postgresql://user:pass@host/db (Neon, Render, Supabase, ...)
+psycopg[binary]==3.2.3

@@ -185,3 +185,27 @@ events we ignored on purpose. Consent statuses are mapped loosely (`APPROVED`/`Y
 
 This version adds tables and columns. There are no migrations yet, so recreate a development database
 (`python -m scripts.seed --reset`, or delete `tracking.db`). Add Alembic before the first production deploy.
+
+## Deploy for free
+
+| Part | Host (free tier) | Notes |
+|---|---|---|
+| Database | [Neon](https://neon.tech) Postgres | Persistent. Render's free Postgres is deleted after 30 days |
+| Backend | [Render](https://render.com) free web service (`render.yaml`) | Sleeps after 15 min without traffic; the first request then takes ~1 min |
+| Dashboard | [Streamlit Community Cloud](https://share.streamlit.io) | Sleeps after a long time without visitors; wake it from the page |
+
+1. **Neon:** create a project (region: Singapore, closest to India), then copy the connection string
+   (`postgresql://...neon.tech/neondb?sslmode=require`).
+2. **Render:** *New → Blueprint*, pick this repo. When asked, paste the Neon string as `DATABASE_URL`, and
+   leave `PUBLIC_TRACKING_BASE_URL` for later. After the deploy, open
+   `https://<service>.onrender.com/healthcheck`. With `SEED_DEMO=true` the 100-driver demo loads on first
+   start. The admin password is under *Environment → ADMIN_PASSWORD*.
+3. **Streamlit Cloud:** *Create app* from the `truck-tracking-dashboard` repo, main file `app.py`, Python 3.12.
+   Under *Advanced settings → Secrets*, add `BACKEND_URL = "https://<service>.onrender.com"`.
+4. Back in Render, set `PUBLIC_TRACKING_BASE_URL` to the Streamlit app URL, so customer tracking links point at it.
+5. Optional: keep the backend awake (SIM pings and alerts only run while it is awake) with a free
+   [UptimeRobot](https://uptimerobot.com) HTTP monitor on `/healthcheck` every 5 minutes. One always-on free
+   service fits in Render's 750 free hours a month.
+
+Limits on the free tier: uploaded POD photos are lost when Render restarts (the disk is temporary; move them
+to object storage for real use), and `DEV_MODE=false` means the driver app needs a real SMS provider for OTPs.

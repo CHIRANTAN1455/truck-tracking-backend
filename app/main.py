@@ -48,10 +48,23 @@ def _run_sim_poll() -> None:
         log.info("SIM poll: %s", stats)
 
 
+def _seed_demo() -> None:
+    from scripts.seed import seed
+
+    try:
+        if seed():
+            log.info("Demo data loaded")
+    except Exception:
+        log.exception("Demo seed failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(engine)
     tasks = [asyncio.create_task(_alert_loop()), asyncio.create_task(_sim_loop())]
+    if settings.seed_demo:
+        # In the background so the server answers health checks while ~100 drivers are loaded.
+        tasks.append(asyncio.create_task(asyncio.to_thread(_seed_demo)))
     yield
     for task in tasks:
         task.cancel()

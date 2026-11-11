@@ -75,6 +75,9 @@ class Settings:
     # A SIM-tracked trip is "stale" after this many missed pings.
     sim_stale_after_pings: float = field(default_factory=lambda: float(_env("SIM_STALE_AFTER_PINGS", "2.5")))
 
+    # Load the demo companies / drivers / trips on startup when the database is empty (free demo deploys).
+    seed_demo: bool = field(default_factory=lambda: _bool("SEED_DEMO", "false"))
+
     upload_dir: str = field(default_factory=lambda: _env("UPLOAD_DIR", "./uploads"))
 
     # Optional email delivery. Without SMTP_HOST notifications are only logged.
